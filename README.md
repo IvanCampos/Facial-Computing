@@ -1,4 +1,7 @@
 # Facial Computing
+Facial Gesture Analysis combining your persona and the computer [Vision Framework](https://developer.apple.com/documentation/vision).
+
+https://github.com/user-attachments/assets/de45b118-8e11-429f-bce3-0d1883500a2b
 
 Concise overview of the repository, with each project file and its responsibility.
 

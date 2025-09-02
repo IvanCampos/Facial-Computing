@@ -14,6 +14,7 @@ import VideoToolbox
 struct PixelBufferView: View {
     let pixelBuffer: CVPixelBuffer?
     @State private var cgImage: CGImage?
+    @State private var lastUpdateTime: TimeInterval = 0
 
     var body: some View {
         ZStack {
@@ -28,10 +29,20 @@ struct PixelBufferView: View {
             }
         }
         .onChange(of: pixelBuffer) { _, newValue in
-            cgImage = PixelBufferView.makeCGImage(from: newValue)
+            let now = CFAbsoluteTimeGetCurrent()
+            // Throttle preview conversions to ~20 fps
+            guard (now - lastUpdateTime) >= 0.05 else { return }
+            lastUpdateTime = now
+            Task {
+                let img = await PixelBufferView.makeCGImageAsync(from: newValue)
+                await MainActor.run { cgImage = img }
+            }
         }
         .onAppear {
-            cgImage = PixelBufferView.makeCGImage(from: pixelBuffer)
+            Task {
+                let img = await PixelBufferView.makeCGImageAsync(from: pixelBuffer)
+                await MainActor.run { cgImage = img }
+            }
         }
     }
 
@@ -47,6 +58,14 @@ struct PixelBufferView: View {
         let ci = CIImage(cvPixelBuffer: pb)
         return ciContext.createCGImage(ci, from: ci.extent)
     }
+
+    static func makeCGImageAsync(from pb: CVPixelBuffer?) async -> CGImage? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let img = makeCGImage(from: pb)
+                continuation.resume(returning: img)
+            }
+        }
+    }
 }
 #endif
-

@@ -24,6 +24,8 @@ struct ImmersiveControlsView: View {
     // Controllers
     @State private var persona = PersonaCaptureController()
     @State private var vision = VisionExpressionController()
+    @State private var isAnalyzing = false
+    @State private var lastAnalysisTime: TimeInterval = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -116,16 +118,22 @@ struct ImmersiveControlsView: View {
                         } else {
                             do { try await persona.start() } catch { }
                             persona.onFrame = { pixelBuffer, _ in
-                                Task { @MainActor in
+                                // Throttle to ~10 fps and prevent overlap
+                                let now = CFAbsoluteTimeGetCurrent()
+                                if isAnalyzing || (now - lastAnalysisTime) < 0.1 { return }
+                                isAnalyzing = true
+                                lastAnalysisTime = now
+                                Task {
                                     _ = await vision.analyze(pixelBuffer: pixelBuffer)
+                                    await MainActor.run { isAnalyzing = false }
                                 }
                             }
                         }
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                Text(persona.isRunning ? "Analyzing…" : "Idle")
-                    .foregroundStyle(persona.isRunning ? .green : .secondary)
+                Text(persona.isRunning ? (isAnalyzing ? "Analyzing…" : "Ready") : "Idle")
+                    .foregroundStyle(persona.isRunning ? (isAnalyzing ? .yellow : .green) : .secondary)
             }
             HStack(alignment: .top, spacing: 12) {
                 PixelBufferView(pixelBuffer: persona.latestPixelBuffer)
@@ -173,7 +181,7 @@ struct ImmersiveControlsView: View {
                 .buttonStyle(.borderedProminent)
 
                 Button("Analyze") {
-                    Task { @MainActor in
+                    Task {
                         if let pb = persona.latestPixelBuffer {
                             _ = await vision.analyze(pixelBuffer: pb)
                         }
@@ -235,9 +243,16 @@ struct ImmersiveControlsView: View {
             try? await persona.start()
         case .vision:
             try? await persona.start()
+            lastAnalysisTime = 0
+            isAnalyzing = false
             persona.onFrame = { pixelBuffer, _ in
-                Task { @MainActor in
+                let now = CFAbsoluteTimeGetCurrent()
+                if isAnalyzing || (now - lastAnalysisTime) < 0.1 { return }
+                isAnalyzing = true
+                lastAnalysisTime = now
+                Task {
                     _ = await vision.analyze(pixelBuffer: pixelBuffer)
+                    await MainActor.run { isAnalyzing = false }
                 }
             }
         case .frame:

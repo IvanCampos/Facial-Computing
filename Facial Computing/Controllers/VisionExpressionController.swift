@@ -12,7 +12,6 @@ import CoreGraphics
 import Vision
 
 /// Detects facial expressions from a CVPixelBuffer using Vision face landmarks.
-@MainActor
 @Observable
 final class VisionExpressionController {
 
@@ -93,12 +92,12 @@ final class VisionExpressionController {
         do {
             try handler.perform([request])
         } catch {
-            lastDetections = []
+            await MainActor.run { self.lastDetections = [] }
             return []
         }
         guard let face = (request.results)?.first,
               let landmarks = face.landmarks else {
-            lastDetections = []
+            await MainActor.run { self.lastDetections = [] }
             return []
         }
 
@@ -184,12 +183,44 @@ final class VisionExpressionController {
             // Corner deltas (smile/frown/smirk/downturn)
             let leftDy = leftCorner.y - centerY
             let rightDy = rightCorner.y - centerY
-            if leftDy < -0.06 && rightDy < -0.06 { detections.insert(.smile); confidence[.smile] = min(1, (abs(leftDy)+abs(rightDy))/0.3) }
-            if leftDy > 0.06 && rightDy > 0.06 { detections.insert(.frown); confidence[.frown] = min(1, ((leftDy+rightDy)/0.3)) }
-            if leftDy < -0.08 && rightDy > -0.02 { detections.insert(.leftSmirk); confidence[.leftSmirk] = min(1, abs(leftDy)/0.2) }
-            if rightDy < -0.08 && leftDy > -0.02 { detections.insert(.rightSmirk); confidence[.rightSmirk] = min(1, abs(rightDy)/0.2) }
-            if leftDy > 0.08 { detections.insert(.leftCornerDownturn); confidence[.leftCornerDownturn] = min(1, leftDy/0.2) }
-            if rightDy > 0.08 { detections.insert(.rightCornerDownturn); confidence[.rightCornerDownturn] = min(1, rightDy/0.2) }
+
+            // Heuristics tuned for Vision's normalized face space:
+            // Use average corner lift/drop and lower thresholds for better sensitivity.
+            let avgDy = (leftDy + rightDy) / 2
+            let smileThreshold: CGFloat = 0.03
+            let frownThreshold: CGFloat = 0.03
+
+            // Smile: both corners rise relative to mouth center
+            if leftDy > smileThreshold && rightDy > smileThreshold {
+                detections.insert(.smile)
+                // Map avgDy beyond threshold into 0..1
+                let score = max(0, avgDy - smileThreshold)
+                confidence[.smile] = min(1, Double(score / 0.15))
+            }
+            // Frown: both corners drop relative to mouth center
+            if leftDy < -frownThreshold && rightDy < -frownThreshold {
+                detections.insert(.frown)
+                let score = max(0, (-avgDy) - frownThreshold)
+                confidence[.frown] = min(1, Double(score / 0.15))
+            }
+            // Smirks: one corner raised notably, other near neutral
+            if leftDy > (smileThreshold + 0.05) && rightDy < (smileThreshold * 0.6) {
+                detections.insert(.leftSmirk)
+                confidence[.leftSmirk] = min(1, Double((leftDy - smileThreshold) / 0.2))
+            }
+            if rightDy > (smileThreshold + 0.05) && leftDy < (smileThreshold * 0.6) {
+                detections.insert(.rightSmirk)
+                confidence[.rightSmirk] = min(1, Double((rightDy - smileThreshold) / 0.2))
+            }
+            // Corner downturns: individual corners pulled down
+            if leftDy < -(frownThreshold + 0.05) {
+                detections.insert(.leftCornerDownturn)
+                confidence[.leftCornerDownturn] = min(1, Double((abs(leftDy) - frownThreshold) / 0.2))
+            }
+            if rightDy < -(frownThreshold + 0.05) {
+                detections.insert(.rightCornerDownturn)
+                confidence[.rightCornerDownturn] = min(1, Double((abs(rightDy) - frownThreshold) / 0.2))
+            }
         }
 
         // Nostril flare is difficult without nostril landmarks; not inferred here.
@@ -199,7 +230,9 @@ final class VisionExpressionController {
             Detection(name: expr.rawValue, emoji: expr.emoji, confidence: confidence[expr] ?? 0.5)
         }
         .sorted { $0.name < $1.name }
-        lastDetections = result
+        await MainActor.run {
+            self.lastDetections = result
+        }
         return result
     }
 
@@ -250,4 +283,3 @@ final class VisionExpressionController {
     }
 }
 #endif
-

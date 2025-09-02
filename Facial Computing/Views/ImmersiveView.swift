@@ -1,6 +1,6 @@
 //
 //  ImmersiveView.swift
-//  Faceial Computing
+//  Facial Computing
 //
 //  Created by IVAN CAMPOS on 8/26/25.
 //
@@ -8,9 +8,6 @@
 import SwiftUI
 import RealityKit
 import RealityKitContent
-#if os(visionOS)
-import ARKit
-#endif
 
 struct ImmersiveView: View {
     @Environment(AppModel.self) var appModel

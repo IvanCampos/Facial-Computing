@@ -134,4 +134,3 @@ extension PersonaCaptureController: AVCaptureVideoDataOutputSampleBufferDelegate
     }
 }
 #endif
-

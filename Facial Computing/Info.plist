@@ -5,11 +5,15 @@
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>
-		<string>UIWindowSceneSessionRoleApplication</string>
+		<string>UISceneSessionRoleImmersiveSpaceApplication</string>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
 		<key>UISceneConfigurations</key>
 		<dict/>
 	</dict>
+	<key>NSMainCameraUsageDescription</key>
+	<string>Main camera access is required to enable spatial sensing and hand tracking in the immersive space.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is needed to capture video when the immersive space opens.</string>
 </dict>
 </plist>
